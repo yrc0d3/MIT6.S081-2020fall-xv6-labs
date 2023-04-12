@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "sysinfo.h"
 
 struct cpu cpus[NCPU];
 
@@ -276,6 +277,7 @@ fork(void)
   np->sz = p->sz;
 
   np->parent = p;
+  np->trace_mask = p->trace_mask;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -692,4 +694,37 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// Returns the number of processes in use
+int
+proccount()
+{
+  int count = 0;
+  struct proc *p;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED) {
+      count++;
+    }
+    release(&p->lock);
+  }
+
+  return count;
+}
+
+// Collect sysinfo
+int
+collect_sysinfo(uint64 addr)
+{
+  struct proc *p = myproc();
+  struct sysinfo si;
+
+  (&si)->freemem = kfreesize();
+  (&si)->nproc = proccount();
+  if(copyout(p->pagetable, addr, (char *)&si, sizeof(si)) < 0){
+    return -1;
+  }
+  return 0;
 }
